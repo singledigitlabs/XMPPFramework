@@ -593,102 +593,12 @@ static NSMutableSet *databaseFileNames;
 
 - (NSManagedObjectContext *)managedObjectContext
 {
-	// This is a private method.
-	// 
-	// NSManagedObjectContext is NOT thread-safe.
-	// Therefore it is VERY VERY BAD to use our private managedObjectContext outside our private storageQueue.
-	// 
-	// You should NOT remove the assert statement below!
-	// You should NOT give external classes access to the storageQueue! (Excluding subclasses obviously.)
-	// 
-	// When you want a managedObjectContext of your own (again, excluding subclasses),
-	// you can use the mainThreadManagedObjectContext (below),
-	// or you should create your own using the public persistentStoreCoordinator.
-	// 
-	// If you even comtemplate ignoring this warning,
-	// then you need to go read the documentation for core data,
-	// specifically the section entitled "Concurrency with Core Data".
-	// 
-	NSAssert(dispatch_get_current_queue() == storageQueue, @"Invoked on incorrect queue");
-	// 
-	// Do NOT remove the assert statment above!
-	// Read the comments above!
-	// 
-	
-	if (managedObjectContext)
-	{
-		return managedObjectContext;
-	}
-	
-	NSPersistentStoreCoordinator *coordinator = [self persistentStoreCoordinator];
-	if (coordinator)
-	{
-		XMPPLogVerbose(@"%@: Creating managedObjectContext", [self class]);
-		
-		if ([NSManagedObjectContext instancesRespondToSelector:@selector(initWithConcurrencyType:)])
-			managedObjectContext =
-			    [[NSManagedObjectContext alloc] initWithConcurrencyType:NSConfinementConcurrencyType];
-		else
-			managedObjectContext = [[NSManagedObjectContext alloc] init];
-		
-		managedObjectContext.persistentStoreCoordinator = coordinator;
-		managedObjectContext.undoManager = nil;
-		
-		[self didCreateManagedObjectContext];
-	}
-	
-	return managedObjectContext;
+    return [NSManagedObjectContext MR_contextForCurrentThread];
 }
 
 - (NSManagedObjectContext *)mainThreadManagedObjectContext
 {
-	// NSManagedObjectContext is NOT thread-safe.
-	// Therefore it is VERY VERY BAD to use this managedObjectContext outside the main thread.
-	// 
-	// You should NOT remove the assert statement below!
-	// 
-	// When you want a managedObjectContext of your own for non-main-thread use,
-	// you should create your own using the public persistentStoreCoordinator.
-	// 
-	// If you even comtemplate ignoring this warning,
-	// then you need to go read the documentation for core data,
-	// specifically the section entitled "Concurrency with Core Data".
-	// 
-	NSAssert(dispatch_get_current_queue() == dispatch_get_main_queue(), @"Context reserved for main thread only");
-	// 
-	// Do NOT remove the assert statment above!
-	// Read the comments above!
-	// 
-	
-	if (mainThreadManagedObjectContext)
-	{
-		return mainThreadManagedObjectContext;
-	}
-	
-	NSPersistentStoreCoordinator *coordinator = [self persistentStoreCoordinator];
-	if (coordinator)
-	{
-		XMPPLogVerbose(@"%@: Creating mainThreadManagedObjectContext", [self class]);
-		
-		if ([NSManagedObjectContext instancesRespondToSelector:@selector(initWithConcurrencyType:)])
-			mainThreadManagedObjectContext =
-			    [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
-		else
-			mainThreadManagedObjectContext = [[NSManagedObjectContext alloc] init];
-		
-		mainThreadManagedObjectContext.persistentStoreCoordinator = coordinator;
-		mainThreadManagedObjectContext.undoManager = nil;
-		
-		[[NSNotificationCenter defaultCenter] addObserver:self
-		                                         selector:@selector(managedObjectContextDidSave:)
-		                                             name:NSManagedObjectContextDidSaveNotification
-		                                           object:nil];
-		
-		// Todo: If we knew that our private managedObjectContext was going to be the only one writing to the database,
-		// then a small optimization would be to use it as the object when registering above.
-	}
-	
-	return mainThreadManagedObjectContext;
+    return [NSManagedObjectContext MR_defaultContext];
 }
 
 - (void)managedObjectContextDidSave:(NSNotification *)notification
@@ -733,17 +643,17 @@ static NSMutableSet *databaseFileNames;
 	
 	[self willSaveManagedObjectContext];
 	
-	NSError *error = nil;
-	if ([[self managedObjectContext] save:&error])
+	__block NSError *error = nil;
+    [[self managedObjectContext] MR_saveWithErrorCallback:^(NSError * e) {
+        XMPPLogWarn(@"%@: Error saving - %@ %@", [self class], error, [error userInfo]);
+		error = e;
+		[[self managedObjectContext] rollback];
+    }];
+    
+	if (error == nil)
 	{
 		saveCount++;
 		[self didSaveManagedObjectContext];
-	}
-	else
-	{
-		XMPPLogWarn(@"%@: Error saving - %@ %@", [self class], error, [error userInfo]);
-		
-		[[self managedObjectContext] rollback];
 	}
 }
 

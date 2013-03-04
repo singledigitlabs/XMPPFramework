@@ -642,9 +642,10 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	NSEntityDescription *messageEntity = [self messageEntity:moc];
 	
 	// Add to database
+    NSString *objectClassName = [messageEntity managedObjectClassName];
+    Class objectClass = NSClassFromString(objectClassName);
 	
-	XMPPRoomMessageCoreDataStorageObject *roomMessage = (XMPPRoomMessageCoreDataStorageObject *)
-	    [[NSManagedObject alloc] initWithEntity:messageEntity insertIntoManagedObjectContext:nil];
+    XMPPRoomMessageCoreDataStorageObject *roomMessage = [objectClass MR_createInContext:moc];
 	
 	roomMessage.message = message;
 	roomMessage.roomJID = roomJID;
@@ -653,10 +654,10 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	roomMessage.body = messageBody;
 	roomMessage.localTimestamp = localTimestamp;
 	roomMessage.remoteTimestamp = remoteTimestamp;
-	roomMessage.isFromMe = isOutgoing;
+	roomMessage.isFromMe = [room.myRoomJID isEqualToJID:[message from]];
 	roomMessage.streamBareJidStr = streamBareJidStr;
 	
-	[moc insertObject:roomMessage];      // Hook if subclassing XMPPRoomMessageCoreDataStorageObject (awakeFromInsert)
+    [moc MR_save];
 	[self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
 }
 
@@ -727,9 +728,10 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	NSString *streamBareJidStr = [[self myJIDForXMPPStream:xmppStream] bare];
 	
 	NSEntityDescription *occupantEntity = [self occupantEntity:moc];
+    NSString *objectClassName = [occupantEntity managedObjectClassName];
+    Class objectClass = NSClassFromString(objectClassName);
 	
-	XMPPRoomOccupantCoreDataStorageObject *occupant = (XMPPRoomOccupantCoreDataStorageObject *)
-	    [[NSManagedObject alloc] initWithEntity:occupantEntity insertIntoManagedObjectContext:nil];
+	XMPPRoomOccupantCoreDataStorageObject *occupant = [objectClass MR_createInContext:moc];
 	
 	occupant.presence = presence;
 	occupant.roomJID = roomJID;
@@ -741,7 +743,7 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	occupant.createdAt = [NSDate date];
 	occupant.streamBareJidStr = streamBareJidStr;
 	
-	[moc insertObject:occupant];       // Hook if subclassing XMPPRoomOccupantCoreDataStorageObject (awakeFromInsert)
+	[moc MR_save];
 	[self didInsertOccupant:occupant]; // Hook if subclassing XMPPRoomCoreDataStorage
 }
 
@@ -964,7 +966,7 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	}];
 }
 
-- (void)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (BOOL)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
@@ -974,13 +976,15 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 		
 		[self insertMessage:message outgoing:YES forRoom:room stream:xmppStream];
 	}];
+    
+    return YES;
 }
 
-- (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (BOOL)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
-	XMPPJID *roomJID = room.roomJID;
+	XMPPJID *roomJID = room.myRoomJID;
 	XMPPJID *messageJID = [message from];
 	
 	if ([roomJID isEqualToJID:messageJID])
@@ -988,7 +992,7 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 		if (![message wasDelayed])
 		{
 			// Ignore - we already stored message in handleOutgoingMessage:room:
-			return;
+			return NO;
 		}
 	}
 	
@@ -1005,6 +1009,8 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 			[self insertMessage:message outgoing:NO forRoom:room stream:xmppStream];
 		}
 	}];
+    
+    return YES;
 }
 
 - (void)handleDidLeaveRoom:(XMPPRoom *)room

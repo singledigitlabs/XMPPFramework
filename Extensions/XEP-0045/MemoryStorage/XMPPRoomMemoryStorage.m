@@ -677,7 +677,7 @@
 	}
 }
 
-- (void)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (BOOL)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	AssertParentQueue();
@@ -688,9 +688,11 @@
 	roomMsg = [[self.messageClass alloc] initWithOutgoingMessage:message jid:msgJID];
 	
 	[self addMessage:roomMsg];
+    
+    return YES;
 }
 
-- (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (BOOL)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	AssertParentQueue();
@@ -702,7 +704,7 @@
 		if (![message wasDelayed])
 		{
 			// Ignore - we already stored message in handleOutgoingMessage:room:
-			return;
+			return NO;
 		}
 	}
 	
@@ -715,6 +717,7 @@
 		XMPPRoomMessageMemoryStorageObject *roomMessage = [[self.messageClass alloc] initWithIncomingMessage:message];
 		[self addMessage:roomMessage];
 	}
+    return YES;
 }
 
 - (void)handleDidLeaveRoom:(XMPPRoom *)room

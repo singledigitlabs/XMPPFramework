@@ -597,7 +597,7 @@ static XMPPRoomHybridStorage *sharedInstance;
 	roomMessage.body = messageBody;
 	roomMessage.localTimestamp = localTimestamp;
 	roomMessage.remoteTimestamp = remoteTimestamp;
-	roomMessage.isFromMe = isOutgoing;
+	roomMessage.isFromMe = [room.myRoomJID isEqualToJID:[message from]];
 	roomMessage.streamBareJidStr = streamBareJidStr;
 	
 	[moc insertObject:roomMessage];      // Hook if subclassing XMPPRoomMessageHybridCDSO (awakeFromInsert)
@@ -978,7 +978,7 @@ static XMPPRoomHybridStorage *sharedInstance;
 	}];
 }
 
-- (void)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (BOOL)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
@@ -988,9 +988,11 @@ static XMPPRoomHybridStorage *sharedInstance;
 		
 		[self insertMessage:message outgoing:YES forRoom:room stream:xmppStream];
 	}];
+    
+    return YES;
 }
 
-- (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (BOOL)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
@@ -1002,7 +1004,7 @@ static XMPPRoomHybridStorage *sharedInstance;
 		if (![message wasDelayed])
 		{
 			// Ignore - we already stored message in handleOutgoingMessage:room:
-			return;
+			return NO;
 		}
 	}
 	
@@ -1019,6 +1021,8 @@ static XMPPRoomHybridStorage *sharedInstance;
 			[self insertMessage:message outgoing:NO forRoom:room stream:xmppStream];
 		}
 	}];
+    
+    return YES;
 }
 
 - (void)handleDidLeaveRoom:(XMPPRoom *)room
