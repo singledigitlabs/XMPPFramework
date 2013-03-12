@@ -86,9 +86,12 @@
 			else
 				listTail = node->prev;
 			
+            DDListNode *nextNode = node->next;
 			free(node);
 			
 			if (!allInstances) break;
+            
+            node = nextNode;
 		}
 		else
 		{

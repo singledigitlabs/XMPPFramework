@@ -456,15 +456,18 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	{
 		deleteTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, storageQueue);
 		
-		dispatch_source_set_event_handler(deleteTimer, ^{ @autoreleasepool {
-			
-			[self performDelete];
-			
-		}});
-		
-		[self updateDeleteTimer];
-		
-		dispatch_resume(deleteTimer);
+        if (deleteTimer != NULL)
+        {
+            dispatch_source_set_event_handler(deleteTimer, ^{ @autoreleasepool {
+                
+                [self performDelete];
+                
+            }});
+            
+            [self updateDeleteTimer];
+            
+            dispatch_resume(deleteTimer);
+        }
 	}
 }
 
