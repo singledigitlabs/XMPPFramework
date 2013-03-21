@@ -981,7 +981,7 @@ static XMPPRoomHybridStorage *sharedInstance;
 	}];
 }
 
-- (BOOL)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (void)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
@@ -990,12 +990,14 @@ static XMPPRoomHybridStorage *sharedInstance;
 	[self scheduleBlock:^{
 		
 		[self insertMessage:message outgoing:YES forRoom:room stream:xmppStream];
+        if ([self respondsToSelector:@selector(handleInsertedOutgoingMessage:room:)])
+        {
+            [self handleInsertedOutgoingMessage:message room:room];
+        }
 	}];
-    
-    return YES;
 }
 
-- (BOOL)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
@@ -1007,7 +1009,7 @@ static XMPPRoomHybridStorage *sharedInstance;
 		if (![message wasDelayed])
 		{
 			// Ignore - we already stored message in handleOutgoingMessage:room:
-			return NO;
+			return;
 		}
 	}
 	
@@ -1022,10 +1024,12 @@ static XMPPRoomHybridStorage *sharedInstance;
 		else
 		{
 			[self insertMessage:message outgoing:NO forRoom:room stream:xmppStream];
+            if ([self respondsToSelector:@selector(handleInsertedIncommingMessage:room:)])
+            {
+                [self handleInsertedIncommingMessage:message room:room];
+            }
 		}
 	}];
-    
-    return YES;
 }
 
 - (void)handleDidLeaveRoom:(XMPPRoom *)room

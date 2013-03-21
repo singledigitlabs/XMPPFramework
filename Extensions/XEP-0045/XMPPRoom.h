@@ -216,8 +216,9 @@ static NSString *const XMPPMUCOwnerNamespace = @"http://jabber.org/protocol/muc#
 /**
  * Stores or otherwise handles the given message element.
 **/
-- (BOOL)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room;
-- (BOOL)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room;
+- (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room;
+- (void)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room;
+
 
 /**
  * Handles leaving the room, which generally means clearing the list of occupants.
@@ -225,6 +226,14 @@ static NSString *const XMPPMUCOwnerNamespace = @"http://jabber.org/protocol/muc#
 - (void)handleDidLeaveRoom:(XMPPRoom *)room;
 
 @optional
+
+/**
+ * May be used if there's anything special to do when a message has been inserted into storage.
+ **/
+
+- (void)handleInsertedIncommingMessage:(XMPPMessage *)message room:(XMPPRoom *)room;
+- (void)handleInsertedOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room;
+
 
 /**
  * May be used if there's anything special to do when joining a room.
