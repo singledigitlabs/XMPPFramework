@@ -553,7 +553,7 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	
 	NSString *streamBareJidStr = [[self myJIDForXMPPStream:xmppStream] bare];
 	
-	XMPPJID *messageJID = [message from];
+	NSString *messageJID = [[message from] full];
 	NSString *messageBody = [[message elementForName:@"body"] stringValue];
 	
 	NSDate *minLocalTimestamp = [remoteTimestamp dateByAddingTimeInterval:-60];
