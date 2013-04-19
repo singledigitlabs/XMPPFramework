@@ -274,10 +274,7 @@ static NSMutableSet *databaseFileNames;
 		else
 			databaseFileName = [[self defaultDatabaseFileName] copy];
 		
-		if (![[self class] registerDatabaseFileName:databaseFileName])
-		{
-			return nil;
-		}
+		[[self class] registerDatabaseFileName:databaseFileName];
 		
 		[self commonInit];
 		NSAssert(storageQueue != NULL, @"Subclass forgot to invoke [super commonInit]");
