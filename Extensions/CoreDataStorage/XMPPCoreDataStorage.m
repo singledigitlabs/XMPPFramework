@@ -619,7 +619,7 @@ static NSMutableSet *databaseFileNames;
 	[self willSaveManagedObjectContext];
 	
 	__block NSError *error = nil;
-    [[self managedObjectContext] MR_saveWithErrorCallback:^(NSError * e) {
+    [[self managedObjectContext] MR_saveInBackgroundErrorHandler:^(NSError * e) {
         XMPPLogWarn(@"%@: Error saving - %@ %@", [self class], error, [error userInfo]);
 		error = e;
 		[[self managedObjectContext] rollback];
