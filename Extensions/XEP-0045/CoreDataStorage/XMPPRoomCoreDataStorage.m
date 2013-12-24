@@ -449,36 +449,39 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 {
 	XMPPLogTrace();
 	AssertPrivateQueue();
-	
-	NSManagedObjectContext *moc = [self managedObjectContext];
-	NSEntityDescription *entity = [self occupantEntity:moc];
-	
-	NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
-	[fetchRequest setEntity:entity];
-	[fetchRequest setFetchBatchSize:saveThreshold];
-	
-	if (roomJID)
-	{
-		NSPredicate *predicate;
-		predicate = [NSPredicate predicateWithFormat:@"roomJIDStr == %@", [roomJID bare]];
-		
-		[fetchRequest setPredicate:predicate];
-	}
-	
-	NSArray *allOccupants = [moc executeFetchRequest:fetchRequest error:nil];
-	
-	NSUInteger unsavedCount = [self numberOfUnsavedChanges];
-	
-	for (XMPPRoomOccupantCoreDataStorageObject *occupant in allOccupants)
-	{
-		[moc deleteObject:occupant];
-		
-		if (++unsavedCount >= saveThreshold)
-		{
-			[self save];
-			unsavedCount = 0;
-		}
-	}
+    
+    [self scheduleBlock:^{
+        
+        NSManagedObjectContext *moc = [self managedObjectContext];
+        NSEntityDescription *entity = [self occupantEntity:moc];
+        
+        NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
+        [fetchRequest setEntity:entity];
+        [fetchRequest setFetchBatchSize:saveThreshold];
+        
+        if (roomJID)
+        {
+            NSPredicate *predicate;
+            predicate = [NSPredicate predicateWithFormat:@"roomJIDStr == %@", [roomJID bare]];
+            
+            [fetchRequest setPredicate:predicate];
+        }
+        
+        NSArray *allOccupants = [moc executeFetchRequest:fetchRequest error:nil];
+        
+        NSUInteger unsavedCount = [self numberOfUnsavedChanges];
+        
+        for (XMPPRoomOccupantCoreDataStorageObject *occupant in allOccupants)
+        {
+            [moc deleteObject:occupant];
+            
+            if (++unsavedCount >= saveThreshold)
+            {
+                [self save];
+                unsavedCount = 0;
+            }
+        }
+    }];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -536,15 +539,15 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	NSString *predicateFormat = @"    body == %@ "
 	                            @"AND jidStr == %@ "
 	                            @"AND streamBareJidStr == %@ "
-	                            /*@"AND "
+	                            @"AND "
 	                            @"("
 	                            @"     (remoteTimestamp == %@) "
 	                            @"  OR (remoteTimestamp == NIL && localTimestamp BETWEEN {%@, %@})"
-	                            @")"*/;
+	                            @")";
 	
 	NSPredicate *predicate = [NSPredicate predicateWithFormat:predicateFormat,
-	                             messageBody, messageJID, streamBareJidStr/*,
-	                             remoteTimestamp, minLocalTimestamp, maxLocalTimestamp)*/];
+	                             messageBody, messageJID, streamBareJidStr,
+	                             remoteTimestamp, minLocalTimestamp, maxLocalTimestamp];
 	
 	NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
 	[fetchRequest setEntity:messageEntity];
@@ -584,13 +587,13 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 **/
 - (void)insertMessage:(XMPPMessage *)message
              outgoing:(BOOL)isOutgoing
-              forRoom:(XMPPRoom *)room
+           forRoomJID:(XMPPJID *)roomJID
+            myRoomJID:(XMPPJID*)myRoomJID
                stream:(XMPPStream *)xmppStream
 {
 	// Extract needed information
 	
-	XMPPJID *roomJID = room.roomJID;
-	XMPPJID *messageJID = isOutgoing ? room.myRoomJID : [message from];
+	XMPPJID *messageJID = isOutgoing ? myRoomJID : [message from];
 	
 	NSDate *localTimestamp;
 	NSDate *remoteTimestamp;
@@ -621,25 +624,28 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	// Add to database
     NSString *objectClassName = [messageEntity managedObjectClassName];
     Class objectClass = NSClassFromString(objectClassName);
-	
-    XMPPRoomMessageCoreDataStorageObject *roomMessage = [objectClass MR_createInContext:moc];
-	
-	roomMessage.message = message;
-	roomMessage.roomJID = roomJID;
-	roomMessage.jid = messageJID;
-	roomMessage.nickname = [messageJID resource];
-	roomMessage.body = messageBody;
-	roomMessage.localTimestamp = localTimestamp;
-	roomMessage.remoteTimestamp = remoteTimestamp;
-	roomMessage.isFromMe = [room.myRoomJID isEqualToJID:[message from]];
-	roomMessage.streamBareJidStr = streamBareJidStr;
-	
-    [moc MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
-        if (success)
-        {
-            [self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
-        }
-    }];
+    
+    [self scheduleBlock:^{
+		XMPPRoomMessageCoreDataStorageObject *roomMessage = [objectClass MR_createInContext:moc];
+        
+        roomMessage.message = message;
+        roomMessage.roomJID = roomJID;
+        roomMessage.jid = messageJID;
+        roomMessage.nickname = [messageJID resource];
+        roomMessage.body = messageBody;
+        roomMessage.localTimestamp = localTimestamp;
+        roomMessage.remoteTimestamp = remoteTimestamp;
+        roomMessage.isFromMe = [myRoomJID isEqualToJID:[message from]];
+        roomMessage.streamBareJidStr = streamBareJidStr;
+        
+        [moc MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
+            if (success)
+            {
+                [self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
+            }
+        }];
+		
+	}];
 }
 
 /**
@@ -957,15 +963,13 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	XMPPLogTrace();
 	
 	XMPPStream *xmppStream = room.xmppStream;
-	
-	[self scheduleBlock:^{
-		
-		[self insertMessage:message outgoing:YES forRoom:room stream:xmppStream];
-        if ([self respondsToSelector:@selector(handleInsertedOutgoingMessage:room:)])
-        {
-            [self handleInsertedOutgoingMessage:message room:room];
-        }
-	}];
+    XMPPJID *myRoomJID = room.myRoomJID;
+    
+    [self insertMessage:message outgoing:YES forRoomJID:room.roomJID myRoomJID:myRoomJID stream:xmppStream];
+    if ([self respondsToSelector:@selector(handleInsertedOutgoingMessage:room:)])
+    {
+        [self handleInsertedOutgoingMessage:message room:room];
+    }
 }
 
 - (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
@@ -989,22 +993,19 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 			return;
 		}
     }
-	
-	[self scheduleBlock:^{
-		
-		if ([self existsMessage:message forRoom:room stream:xmppStream])
-		{
-			XMPPLogVerbose(@"%@: %@ - Duplicate message", THIS_FILE, THIS_METHOD);
-		}
-		else
-		{
-			[self insertMessage:message outgoing:NO forRoom:room stream:xmppStream];
-            if ([self respondsToSelector:@selector(handleInsertedIncommingMessage:room:)])
-            {
-                [self handleInsertedIncommingMessage:message room:room];
-            }
-		}
-	}];
+    
+    if ([self existsMessage:message forRoom:room stream:xmppStream])
+    {
+        XMPPLogVerbose(@"%@: %@ - Duplicate message", THIS_FILE, THIS_METHOD);
+    }
+    else
+    {
+        [self insertMessage:message outgoing:NO forRoomJID:room.roomJID myRoomJID:myRoomJID stream:xmppStream];
+        if ([self respondsToSelector:@selector(handleInsertedIncommingMessage:room:)])
+        {
+            [self handleInsertedIncommingMessage:message room:room];
+        }
+    }
 }
 
 - (void)handleDidLeaveRoom:(XMPPRoom *)room
@@ -1012,11 +1013,8 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	XMPPLogTrace();
 	
 	XMPPJID *roomJID = room.roomJID;
-	
-	[self scheduleBlock:^{
 		
-		[self clearAllOccupantsFromRoom:roomJID];
-	}];
+    [self clearAllOccupantsFromRoom:roomJID];
 }
 
 @end
