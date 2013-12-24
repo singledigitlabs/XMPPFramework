@@ -617,19 +617,19 @@ static NSMutableSet *databaseFileNames;
 	// called from maybeSave below, which already does this check.
 	
 	[self willSaveManagedObjectContext];
-	
-	__block NSError *error = nil;
-    [[self managedObjectContext] MR_saveInBackgroundErrorHandler:^(NSError * e) {
-        XMPPLogWarn(@"%@: Error saving - %@ %@", [self class], error, [error userInfo]);
-		error = e;
-		[[self managedObjectContext] rollback];
-    }];
     
-	if (error == nil)
-	{
-		saveCount++;
-		[self didSaveManagedObjectContext];
-	}
+    [[self managedObjectContext] MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
+        if (success == NO)
+        {
+            XMPPLogWarn(@"%@: Error saving - %@ %@", [self class], error, [error userInfo]);
+            [[self managedObjectContext] rollback];
+        }
+        else
+        {
+            saveCount++;
+            [self didSaveManagedObjectContext];
+        }
+    }];	
 }
 
 - (void)maybeSave:(int32_t)currentPendingRequests

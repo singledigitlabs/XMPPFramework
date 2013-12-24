@@ -536,15 +536,15 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	NSString *predicateFormat = @"    body == %@ "
 	                            @"AND jidStr == %@ "
 	                            @"AND streamBareJidStr == %@ "
-	                            @"AND "
+	                            /*@"AND "
 	                            @"("
 	                            @"     (remoteTimestamp == %@) "
 	                            @"  OR (remoteTimestamp == NIL && localTimestamp BETWEEN {%@, %@})"
-	                            @")";
+	                            @")"*/;
 	
 	NSPredicate *predicate = [NSPredicate predicateWithFormat:predicateFormat,
-	                             messageBody, messageJID, streamBareJidStr,
-	                             remoteTimestamp, minLocalTimestamp, maxLocalTimestamp];
+	                             messageBody, messageJID, streamBareJidStr/*,
+	                             remoteTimestamp, minLocalTimestamp, maxLocalTimestamp)*/];
 	
 	NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
 	[fetchRequest setEntity:messageEntity];
@@ -634,8 +634,12 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	roomMessage.isFromMe = [room.myRoomJID isEqualToJID:[message from]];
 	roomMessage.streamBareJidStr = streamBareJidStr;
 	
-    [moc MR_save];
-	[self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
+    [moc MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
+        if (success)
+        {
+            [self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
+        }
+    }];
 }
 
 /**
@@ -720,8 +724,13 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	occupant.createdAt = [NSDate date];
 	occupant.streamBareJidStr = streamBareJidStr;
 	
-	[moc MR_save];
-	[self didInsertOccupant:occupant]; // Hook if subclassing XMPPRoomCoreDataStorage
+    
+    [moc MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
+        if (success)
+        {
+            [self didInsertOccupant:occupant]; // Hook if subclassing XMPPRoomCoreDataStorage
+        }
+    }];
 }
 
 /**
@@ -943,7 +952,7 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	}];
 }
 
-- (BOOL)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
+- (void)handleOutgoingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
@@ -957,27 +966,29 @@ static XMPPRoomCoreDataStorage *sharedInstance;
             [self handleInsertedOutgoingMessage:message room:room];
         }
 	}];
-    
-    return YES;
 }
 
 - (void)handleIncomingMessage:(XMPPMessage *)message room:(XMPPRoom *)room
 {
 	XMPPLogTrace();
 	
-	XMPPJID *myRoomJID = room.myRoomJID;
-	XMPPJID *messageJID = [message from];
-	
-	if ([myRoomJID isEqualToJID:messageJID])
+	XMPPStream *xmppStream = room.xmppStream;
+    
+    if ([[[message from] resource] length] < 1)
+    {
+        return;
+    }
+    
+    XMPPJID *myRoomJID = room.myRoomJID;
+    XMPPJID *messageJID = [message from];
+    if ([myRoomJID isEqualToJID:messageJID])
 	{
 		if (![message wasDelayed])
 		{
 			// Ignore - we already stored message in handleOutgoingMessage:room:
 			return;
 		}
-	}
-	
-	XMPPStream *xmppStream = room.xmppStream;
+    }
 	
 	[self scheduleBlock:^{
 		
