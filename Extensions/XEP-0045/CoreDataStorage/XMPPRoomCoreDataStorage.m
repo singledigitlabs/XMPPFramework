@@ -447,10 +447,10 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 
 - (void)clearAllOccupantsFromRoom:(XMPPJID *)roomJID
 {
-	XMPPLogTrace();
-	AssertPrivateQueue();
-    
     [self scheduleBlock:^{
+ 
+        XMPPLogTrace();
+        AssertPrivateQueue();
         
         NSManagedObjectContext *moc = [self managedObjectContext];
         NSEntityDescription *entity = [self occupantEntity:moc];
