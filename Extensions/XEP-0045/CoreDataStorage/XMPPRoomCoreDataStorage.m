@@ -616,16 +616,16 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	
 	NSString *messageBody = [[message elementForName:@"body"] stringValue];
 	
-	NSManagedObjectContext *moc = [self managedObjectContext];
 	NSString *streamBareJidStr = [[self myJIDForXMPPStream:xmppStream] bare];
-	
-	NSEntityDescription *messageEntity = [self messageEntity:moc];
-	
-	// Add to database
-    NSString *objectClassName = [messageEntity managedObjectClassName];
-    Class objectClass = NSClassFromString(objectClassName);
     
     [self scheduleBlock:^{
+        NSManagedObjectContext *moc = [self managedObjectContext];
+        NSEntityDescription *messageEntity = [self messageEntity:moc];
+        
+        // Add to database
+        NSString *objectClassName = [messageEntity managedObjectClassName];
+        Class objectClass = NSClassFromString(objectClassName);
+        
 		XMPPRoomMessageCoreDataStorageObject *roomMessage = [objectClass MR_createInContext:moc];
         
         roomMessage.message = message;
@@ -638,13 +638,8 @@ static XMPPRoomCoreDataStorage *sharedInstance;
         roomMessage.isFromMe = [myRoomJID isEqualToJID:[message from]];
         roomMessage.streamBareJidStr = streamBareJidStr;
         
-        [moc MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
-            if (success)
-            {
-                [self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
-            }
-        }];
-		
+        [moc insertObject:roomMessage];
+        [self didInsertMessage:roomMessage]; // Hook if subclassing XMPPRoomCoreDataStorage
 	}];
 }
 
@@ -730,13 +725,7 @@ static XMPPRoomCoreDataStorage *sharedInstance;
 	occupant.createdAt = [NSDate date];
 	occupant.streamBareJidStr = streamBareJidStr;
 	
-    
-    [moc MR_saveToPersistentStoreWithCompletion:^(BOOL success, NSError *error) {
-        if (success)
-        {
-            [self didInsertOccupant:occupant]; // Hook if subclassing XMPPRoomCoreDataStorage
-        }
-    }];
+    [self didInsertOccupant:occupant]; // Hook if subclassing XMPPRoomCoreDataStorage
 }
 
 /**
