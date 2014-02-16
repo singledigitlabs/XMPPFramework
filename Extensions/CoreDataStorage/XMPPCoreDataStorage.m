@@ -680,19 +680,19 @@ static NSMutableSet *databaseFileNames;
 	//          ^
 	
 	OSAtomicIncrement32(&pendingRequests);
-	dispatch_sync(storageQueue, ^{
+	dispatch_sync(storageQueue, ^{ @autoreleasepool {
 		
 		block();
 		
 		// Since this is a synchronous request, we want to return as quickly as possible.
 		// So we delay the maybeSave operation til later.
 		
-		dispatch_async(storageQueue, ^{
+		dispatch_async(storageQueue, ^{ @autoreleasepool {
 			
 			[self maybeSave:OSAtomicDecrement32(&pendingRequests)];
-		});
+		}});
 		
-	});
+	}});
 }
 
 - (void)scheduleBlock:(dispatch_block_t)block
@@ -710,12 +710,12 @@ static NSMutableSet *databaseFileNames;
 	//          ^
 	
 	OSAtomicIncrement32(&pendingRequests);
-	dispatch_async(storageQueue, ^{
+	dispatch_async(storageQueue, ^{ @autoreleasepool {
 		
 		block();
         [self maybeSave:OSAtomicDecrement32(&pendingRequests)];
 
-	});
+	}});
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
